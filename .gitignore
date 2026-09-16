@@ -17,3 +17,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Ignore a specific file
+application-local.properties
