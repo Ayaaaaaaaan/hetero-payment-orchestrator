@@ -14,18 +14,23 @@ import java.util.UUID;
 public class OrchestratorService {
 
     private final ExecutionClient executionClient;
+    private final ProviderSelectionService providerSelectionService;   // ← NEW
 
     public PaymentResponse processPayment(PaymentRequest request) {
         // 1. Generate transaction ID
         String transactionId = "TXN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         log.info("Processing payment: {}", transactionId);
 
-        // 2. Build ExecutionRequest
+        // 2. Select provider (NEW LOGIC)
+        String selectedProvider = providerSelectionService.selectProvider(request);
+        log.info("Selected provider: {}", selectedProvider);
+
+        // 3. Build ExecutionRequest
         ExecutionRequest execRequest = new ExecutionRequest(
                 transactionId,
                 request.getAmount(),
                 request.getCurrency(),
-                request.getProvider(),
+                selectedProvider,                    // ← use selected, not requested
                 request.getCardNumber(),
                 request.getCvv(),
                 request.getExpiryMonth(),
@@ -34,10 +39,10 @@ public class OrchestratorService {
                 request.getCustomerName()
         );
 
-        // 3. Call Execution Service
+        // 4. Call Execution Service
         ExecutionResult result = executionClient.execute(execRequest);
 
-        // 4. Convert to PaymentResponse
+        // 5. Convert to PaymentResponse
         return PaymentResponse.builder()
                 .transactionId(result.getTransactionId())
                 .providerTransactionId(result.getProviderTransactionId())
