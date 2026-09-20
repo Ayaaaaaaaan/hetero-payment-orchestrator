@@ -1,7 +1,9 @@
 package com.ayaan.orchestrator.service;
 
 import com.ayaan.orchestrator.client.ExecutionClient;
+import com.ayaan.orchestrator.entity.Transaction;
 import com.ayaan.orchestrator.model.*;
+import com.ayaan.orchestrator.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,23 +16,37 @@ import java.util.UUID;
 public class OrchestratorService {
 
     private final ExecutionClient executionClient;
-    private final ProviderSelectionService providerSelectionService;   // ← NEW
+    private final ProviderSelectionService providerSelectionService;
+    private final TransactionRepository transactionRepository;
 
     public PaymentResponse processPayment(PaymentRequest request) {
-        // 1. Generate transaction ID
+
+        // Step 1: Generate transaction ID
         String transactionId = "TXN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         log.info("Processing payment: {}", transactionId);
 
-        // 2. Select provider (NEW LOGIC)
+        // Step 2: Select provider
         String selectedProvider = providerSelectionService.selectProvider(request);
         log.info("Selected provider: {}", selectedProvider);
 
-        // 3. Build ExecutionRequest
+        // Step 3: Save transaction to DB with status=PROCESSING
+        Transaction transaction = Transaction.builder()
+                .transactionId(transactionId)
+                .userId(request.getUserId())
+                .amount(request.getAmount())
+                .currency(request.getCurrency())
+                .provider(selectedProvider)
+                .status("PROCESSING")
+                .build();
+        transactionRepository.save(transaction);
+        log.info("Saved transaction {} with status PROCESSING", transactionId);
+
+        // Step 4: Build ExecutionRequest
         ExecutionRequest execRequest = new ExecutionRequest(
                 transactionId,
                 request.getAmount(),
                 request.getCurrency(),
-                selectedProvider,                    // ← use selected, not requested
+                selectedProvider,
                 request.getCardNumber(),
                 request.getCvv(),
                 request.getExpiryMonth(),
@@ -39,10 +55,17 @@ public class OrchestratorService {
                 request.getCustomerName()
         );
 
-        // 4. Call Execution Service
+        // Step 5: Call Execution Service
         ExecutionResult result = executionClient.execute(execRequest);
 
-        // 5. Convert to PaymentResponse
+        // Step 6: Update transaction status in DB
+        transaction.setStatus(result.getStatus());
+        transaction.setProviderTransactionId(result.getProviderTransactionId());
+        transaction.setMessage(result.getMessage());
+        transactionRepository.save(transaction);
+        log.info("Updated transaction {} → {}", transactionId, result.getStatus());
+
+        // Step 7: Return response to client
         return PaymentResponse.builder()
                 .transactionId(result.getTransactionId())
                 .providerTransactionId(result.getProviderTransactionId())
