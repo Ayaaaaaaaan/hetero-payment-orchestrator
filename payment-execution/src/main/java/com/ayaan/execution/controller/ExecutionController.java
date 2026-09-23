@@ -1,5 +1,6 @@
 package com.ayaan.execution.controller;
 
+import com.ayaan.execution.component.FailureSimulator;
 import com.ayaan.execution.factory.ProviderFactory;
 import com.ayaan.execution.model.ExecutionRequest;
 import com.ayaan.execution.model.ExecutionResult;
@@ -9,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/execution")
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 public class ExecutionController {
 
     private final ProviderFactory providerFactory;
+    private final FailureSimulator failureSimulator;
 
     @PostMapping("/execute")
     public ResponseEntity<ExecutionResult> execute(@RequestBody ExecutionRequest request) {
@@ -45,5 +49,22 @@ public class ExecutionController {
                             .timestamp(System.currentTimeMillis())
                             .build());
         }
+    }
+
+    @PostMapping("/simulate-failure/{provider}")
+    public Map<String, Object> enableFailure(@PathVariable String provider) {
+        failureSimulator.enable(provider);
+        return Map.of("provider", provider, "simulatedFailure", true);
+    }
+
+    @DeleteMapping("/simulate-failure/{provider}")
+    public Map<String, Object> disableFailure(@PathVariable String provider) {
+        failureSimulator.disable(provider);
+        return Map.of("provider", provider, "simulatedFailure", false);
+    }
+
+    @GetMapping("/simulate-failure")
+    public Map<String, Object> activeFailures() {
+        return Map.of("activeFailures", failureSimulator.getActive());
     }
 }

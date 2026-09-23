@@ -1,19 +1,23 @@
 package com.ayaan.execution.provider;
 
+import com.ayaan.execution.component.FailureSimulator;
 import com.ayaan.execution.model.ExecutionRequest;
 import com.ayaan.execution.model.ExecutionResult;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 import java.util.Base64;
 import java.util.UUID;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class RazorpayProvider implements PaymentProvider {
 
     @Value("${razorpay.key.id}")
@@ -23,9 +27,14 @@ public class RazorpayProvider implements PaymentProvider {
     private String keySecret;
 
     private final RestTemplate restTemplate = new RestTemplate();
+    private final FailureSimulator failureSimulator;
 
     @Override
+    @CircuitBreaker(name = "razorpay", fallbackMethod = "fallbackPayment")
     public ExecutionResult processPayment(ExecutionRequest request) {
+        if (failureSimulator.shouldFail("razorpay")) {
+            throw new RuntimeException("Simulated Razorpay failure");
+        }
         try {
             JSONObject body = new JSONObject();
             body.put("amount", (int) (request.getAmount() * 100));
@@ -66,6 +75,17 @@ public class RazorpayProvider implements PaymentProvider {
                     .timestamp(System.currentTimeMillis())
                     .build();
         }
+    }
+    
+    public ExecutionResult fallbackPayment(ExecutionRequest request, Throwable t) {
+    log.warn("Razorpay circuit breaker FALLBACK triggered: {}", t.getMessage());
+    return ExecutionResult.builder()
+            .transactionId(request.getTransactionId())
+            .status("PENDING")
+            .provider("razorpay")
+            .message("Razorpay temporarily unavailable. Payment queued for retry.")
+            .timestamp(System.currentTimeMillis())
+            .build();
     }
 
     @Override

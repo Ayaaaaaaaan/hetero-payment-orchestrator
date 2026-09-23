@@ -1,19 +1,23 @@
 package com.ayaan.execution.provider;
 
+import com.ayaan.execution.component.FailureSimulator;
 import com.ayaan.execution.model.ExecutionRequest;
 import com.ayaan.execution.model.ExecutionResult;
 import com.paypal.api.payments.*;
 import com.paypal.base.rest.APIContext;
 import com.paypal.base.rest.PayPalRESTException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class PayPalProvider implements PaymentProvider {
 
     @Value("${paypal.client.id}")
@@ -25,8 +29,14 @@ public class PayPalProvider implements PaymentProvider {
     @Value("${paypal.mode}")
     private String mode;
 
+     private final FailureSimulator failureSimulator;
+
     @Override
+    @CircuitBreaker(name = "paypal", fallbackMethod = "fallbackPayment")
     public ExecutionResult processPayment(ExecutionRequest request) {
+        if (failureSimulator.shouldFail("paypal")) {
+            throw new RuntimeException("Simulated PayPal failure");
+        }
         try {
             APIContext apiContext = new APIContext(clientId, clientSecret, mode);
 
@@ -83,7 +93,16 @@ public class PayPalProvider implements PaymentProvider {
                     .build();
         }
     }
-
+    public ExecutionResult fallbackPayment(ExecutionRequest request, Throwable t) {
+        log.warn("PayPal circuit breaker FALLBACK triggered: {}", t.getMessage());
+        return ExecutionResult.builder()
+                .transactionId(request.getTransactionId())
+                .status("PENDING")
+                .provider("paypal")
+                .message("PayPal temporarily unavailable. Payment queued for retry.")
+                .timestamp(System.currentTimeMillis())
+                .build();
+    }
     @Override
     public String getProviderName() {
         return "paypal";
