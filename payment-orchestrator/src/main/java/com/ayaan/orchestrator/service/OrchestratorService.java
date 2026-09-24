@@ -18,6 +18,7 @@ public class OrchestratorService {
     private final ExecutionClient executionClient;
     private final ProviderSelectionService providerSelectionService;
     private final TransactionRepository transactionRepository;
+    private final CacheService cacheService;
 
     public PaymentResponse processPayment(PaymentRequest request) {
 
@@ -39,6 +40,8 @@ public class OrchestratorService {
                 .status("PROCESSING")
                 .build();
         transactionRepository.save(transaction);
+        cacheService.invalidateTransaction(transactionId);
+        cacheService.invalidateUserTransactions(request.getUserId());
         log.info("Saved transaction {} with status PROCESSING", transactionId);
 
         // Step 4: Build ExecutionRequest
@@ -64,6 +67,8 @@ public class OrchestratorService {
         transaction.setMessage(result.getMessage());
         transactionRepository.save(transaction);
         log.info("Updated transaction {} → {}", transactionId, result.getStatus());
+        cacheService.invalidateTransaction(transactionId);
+        cacheService.invalidateUserTransactions(request.getUserId());
 
         // Step 7: Return response to client
         return PaymentResponse.builder()
