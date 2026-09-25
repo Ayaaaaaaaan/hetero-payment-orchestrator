@@ -1,0 +1,41 @@
+{
+  "globalEnabled": true,
+  "rules": [
+    {
+      "id": "MAX_SINGLE_AMOUNT",
+      "name": "Single Transaction Limit",
+      "type": "MAX_AMOUNT",
+      "enabled": true,
+      "priority": 1,
+      "params": { "maxAmount": 250000 },
+      "message": "Single transaction amount exceeds maximum allowed limit"
+    },
+    {
+      "id": "DAILY_LIMIT",
+      "name": "Daily Cumulative Limit",
+      "type": "DAILY_LIMIT",
+      "enabled": true,
+      "priority": 2,
+      "params": { "dailyLimit": 500000 },
+      "message": "Daily cumulative transaction limit exceeded"
+    },
+    {
+      "id": "FREQUENCY_CHECK",
+      "name": "Transaction Frequency Check",
+      "type": "FREQUENCY",
+      "enabled": true,
+      "priority": 3,
+      "params": { "maxTransactions": 5, "windowMinutes": 60 },
+      "message": "Too many transactions in a short period"
+    },
+    {
+      "id": "NEW_USER_LARGE",
+      "name": "New User High Amount",
+      "type": "NEW_USER_HIGH_AMOUNT",
+      "enabled": true,
+      "priority": 4,
+      "params": { "amountThreshold": 50000 },
+      "message": "New user attempting high-value transaction"
+    }
+  ]
+}

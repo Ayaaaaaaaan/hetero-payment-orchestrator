@@ -54,6 +54,9 @@ public class Transaction {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "blocked_reason", length = 500)
+    private String blockedReason;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

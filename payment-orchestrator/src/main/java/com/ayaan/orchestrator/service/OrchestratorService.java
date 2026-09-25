@@ -19,6 +19,7 @@ public class OrchestratorService {
     private final ProviderSelectionService providerSelectionService;
     private final TransactionRepository transactionRepository;
     private final CacheService cacheService;
+    private final FraudDetectionService fraudDetectionService;
 
     public PaymentResponse processPayment(PaymentRequest request) {
 
@@ -29,6 +30,33 @@ public class OrchestratorService {
         // Step 2: Select provider
         String selectedProvider = providerSelectionService.selectProvider(request);
         log.info("Selected provider: {}", selectedProvider);
+
+        // Step 2.5: Fraud check
+        FraudCheckResult fraudResult = fraudDetectionService.check(request);
+        if (fraudResult.isBlocked()) {
+        log.warn("Payment blocked by fraud rule: {} - {}", fraudResult.getRuleId(), fraudResult.getReason());
+        
+        Transaction blocked = Transaction.builder()
+                .transactionId(transactionId)
+                .userId(request.getUserId())
+                .amount(request.getAmount())
+                .currency(request.getCurrency())
+                .provider(selectedProvider)
+                .status("BLOCKED")
+                .message(fraudResult.getReason())
+                .blockedReason(fraudResult.getRuleName())
+                .build();
+        transactionRepository.save(blocked);
+        cacheService.invalidateUserTransactions(request.getUserId());
+
+        return PaymentResponse.builder()
+                .transactionId(transactionId)
+                .status("BLOCKED")
+                .provider(selectedProvider)
+                .message("Payment blocked: " + fraudResult.getReason())
+                .timestamp(System.currentTimeMillis())
+                .build();
+        }
 
         // Step 3: Save transaction to DB with status=PROCESSING
         Transaction transaction = Transaction.builder()
