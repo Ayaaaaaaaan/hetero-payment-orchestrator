@@ -57,10 +57,27 @@ public class Transaction {
     @Column(name = "blocked_reason", length = 500)
     private String blockedReason;
 
+    @Column(name = "retry_count", nullable = false)
+    @Builder.Default
+    private Integer retryCount = 0;
+
+    @Column(name = "max_retries", nullable = false)
+    @Builder.Default
+    private Integer maxRetries = 5;
+
+    @Column(name = "expiry_time")
+    private LocalDateTime expiryTime;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+        if (this.expiryTime == null) {
+            this.expiryTime = LocalDateTime.now().plusMinutes(15);
+        }
     }
 
     @PreUpdate

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.List;
 
 @RestController
@@ -56,5 +57,25 @@ public class TransactionController {
     @GetMapping("/status/{status}")
     public List<Transaction> getByStatus(@PathVariable String status) {
         return transactionRepository.findByStatus(status.toUpperCase());
+    }
+    
+    @PostMapping("/{transactionId}/cancel")
+    public ResponseEntity<?> cancel(@PathVariable String transactionId) {
+        return transactionRepository.findByTransactionId(transactionId)
+                .map(txn -> {
+                    if (!"PENDING".equals(txn.getStatus()) && !"PROCESSING".equals(txn.getStatus())) {
+                        return ResponseEntity.badRequest()
+                                .body(Map.of("error", "Only PENDING or PROCESSING transactions can be cancelled",
+                                        "currentStatus", txn.getStatus()));
+                    }
+                    txn.setStatus("CANCELLED");
+                    txn.setCancelledAt(java.time.LocalDateTime.now());
+                    txn.setMessage("Cancelled by user");
+                    transactionRepository.save(txn);
+                    cacheService.invalidateTransaction(transactionId);
+                    cacheService.invalidateUserTransactions(txn.getUserId());
+                    return ResponseEntity.ok(Map.of("transactionId", transactionId, "status", "CANCELLED"));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }

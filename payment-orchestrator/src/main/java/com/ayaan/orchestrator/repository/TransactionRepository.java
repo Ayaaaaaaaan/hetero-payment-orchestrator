@@ -29,4 +29,13 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
            "WHERE t.userId = :userId AND t.createdAt >= :since " +
            "AND t.status IN ('SUCCESS', 'PROCESSING')")
     Double sumAmountSince(@Param("userId") String userId, @Param("since") LocalDateTime since);
+
+    @Query("SELECT t FROM Transaction t WHERE t.status = 'PENDING' " +
+        "AND t.expiryTime > :now")
+    List<Transaction> findRetryablePending(@Param("now") LocalDateTime now);
+
+    List<Transaction> findByStatusAndExpiryTimeBefore(String status, LocalDateTime time);
+
+    @Query("SELECT t FROM Transaction t WHERE t.status = 'PENDING'")
+    List<Transaction> findAllPending();
 }
