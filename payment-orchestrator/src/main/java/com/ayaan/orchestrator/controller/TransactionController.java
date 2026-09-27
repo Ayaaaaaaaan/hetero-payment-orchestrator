@@ -78,4 +78,14 @@ public class TransactionController {
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    @GetMapping("/recent")
+    public List<Transaction> getRecent() {
+        return transactionRepository.findTop50ByOrderByIdDesc();
+    }
+
+    @GetMapping("/count")
+public Map<String, Long> getCount() {
+    return Map.of("total", transactionRepository.count());
+}
 }
