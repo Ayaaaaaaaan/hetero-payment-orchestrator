@@ -22,9 +22,16 @@ public class FraudDetectionService {
 
     private final TransactionRepository transactionRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final software.amazon.awssdk.services.s3.S3Client s3Client;
 
     @Value("${fraud.rules.file}")
     private String rulesFilePath;
+
+    @Value("${fraud.rules.s3-bucket:}")
+    private String s3Bucket;
+
+    @Value("${fraud.rules.s3-key:fraud-rules.json}")
+    private String s3Key;
 
     private FraudRulesConfig rulesConfig;
 
@@ -35,18 +42,22 @@ public class FraudDetectionService {
 
     public void reloadRules() {
         try {
-            File file = new File(rulesFilePath);
-            if (!file.exists()) {
-                log.error("Fraud rules file not found at: {}", file.getAbsolutePath());
-                rulesConfig = new FraudRulesConfig(true, List.of());
-                return;
+            String json;
+            if (s3Bucket != null && !s3Bucket.isBlank()) {
+                // Read from S3 (EC2 IAM role grants access — no keys needed)
+                json = s3Client.getObjectAsBytes(b -> b.bucket(s3Bucket).key(s3Key))
+                        .asUtf8String();
+                log.info("Loaded fraud rules from S3: s3://{}/{}", s3Bucket, s3Key);
+            } else {
+                // Fallback to local file (development)
+                json = new String(java.nio.file.Files.readAllBytes(
+                        java.nio.file.Paths.get(rulesFilePath)));
+                log.info("Loaded fraud rules from local file");
             }
-            rulesConfig = objectMapper.readValue(file, FraudRulesConfig.class);
-            log.info("Loaded {} fraud rules (globalEnabled={})",
-                    rulesConfig.getRules().size(), rulesConfig.isGlobalEnabled());
+            rulesConfig = objectMapper.readValue(json, FraudRulesConfig.class);
         } catch (Exception e) {
             log.error("Failed to load fraud rules: {}", e.getMessage());
-            rulesConfig = new FraudRulesConfig(true, List.of());
+            rulesConfig = new FraudRulesConfig(true, java.util.List.of());
         }
     }
 
@@ -85,11 +96,11 @@ public class FraudDetectionService {
 
     private boolean matches(FraudRule rule, PaymentRequest request) {
         return switch (rule.getType()) {
-            case "MAX_AMOUNT" -> matchMaxAmount(rule, request);
-            case "DAILY_LIMIT" -> matchDailyLimit(rule, request);
-            case "FREQUENCY" -> matchFrequency(rule, request);
-            case "NEW_USER_HIGH_AMOUNT" -> matchNewUserHighAmount(rule, request);
-            default -> false;
+            case "MAX_AMOUNT" -> matchMaxAmount (rule, request);
+            case "DAILY_LIMIT" -> matchDailyLimit (rule, request);
+            case "FREQUENCY" -> matchFrequency (rule, request);
+            case "NEW_USER_HIGH_AMOUNT" -> matchNewUserHighAmount (rule, request);
+            default -> false ;
         };
     }
 
@@ -102,11 +113,13 @@ public class FraudDetectionService {
 
     private boolean matchDailyLimit(FraudRule rule, PaymentRequest request) {
         Double limit = getDouble(rule, "dailyLimit");
-        if (limit == null) return false;
+        if (limit == null)
+            return false;
 
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         Double todaySum = transactionRepository.sumAmountSince(request.getUserId(), startOfDay);
-        if (todaySum == null) todaySum = 0.0;
+        if (todaySum == null)
+            todaySum = 0.0;
 
         return (todaySum + request.getAmount()) > limit;
     }
@@ -114,7 +127,8 @@ public class FraudDetectionService {
     private boolean matchFrequency(FraudRule rule, PaymentRequest request) {
         Integer maxTxns = getInt(rule, "maxTransactions");
         Integer windowMinutes = getInt(rule, "windowMinutes");
-        if (maxTxns == null || windowMinutes == null) return false;
+        if (maxTxns == null || windowMinutes == null)
+            return false;
 
         LocalDateTime since = LocalDateTime.now().minusMinutes(windowMinutes);
         long count = transactionRepository.countByUserIdSince(request.getUserId(), since);
@@ -123,7 +137,8 @@ public class FraudDetectionService {
 
     private boolean matchNewUserHighAmount(FraudRule rule, PaymentRequest request) {
         Double threshold = getDouble(rule, "amountThreshold");
-        if (threshold == null) return false;
+        if (threshold == null)
+            return false;
 
         long userTxns = transactionRepository.countByUserId(request.getUserId());
         return userTxns == 0 && request.getAmount() > threshold;
@@ -133,13 +148,15 @@ public class FraudDetectionService {
 
     private Double getDouble(FraudRule rule, String key) {
         Object v = rule.getParams().get(key);
-        if (v == null) return null;
+        if (v == null)
+            return null;
         return ((Number) v).doubleValue();
     }
 
     private Integer getInt(FraudRule rule, String key) {
         Object v = rule.getParams().get(key);
-        if (v == null) return null;
+        if (v == null)
+            return null;
         return ((Number) v).intValue();
     }
 }

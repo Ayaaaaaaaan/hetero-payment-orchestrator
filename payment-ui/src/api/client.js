@@ -1,7 +1,7 @@
 import axios from "axios";
 
-const ORCHESTRATOR = "http://localhost:8050";
-const EXECUTION = "http://localhost:8051";
+const ORCHESTRATOR = "http://15.135.70.219:8050";  // ← my real EC2 Public IP
+const EXECUTION    = "http://15.135.70.219:8051";
 
 const orchestratorApi = axios.create({ baseURL: ORCHESTRATOR });
 const executionApi = axios.create({ baseURL: EXECUTION });
