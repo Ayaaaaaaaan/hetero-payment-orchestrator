@@ -4,6 +4,7 @@ import com.ayaan.execution.component.FailureSimulator;
 import com.ayaan.execution.model.ExecutionRequest;
 import com.ayaan.execution.model.ExecutionResult;
 import com.stripe.Stripe;
+import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
 import lombok.RequiredArgsConstructor;
@@ -28,16 +29,17 @@ public class StripeProvider implements PaymentProvider {
         if (failureSimulator.shouldFail("stripe")) {
             throw new RuntimeException("Simulated Stripe failure");
         }
+
+        Stripe.apiKey = stripeApiKey;
+
+        PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                .setAmount((long)(request.getAmount() * 100)) // In cents
+                .setCurrency(request.getCurrency().toLowerCase())
+                .setDescription("Payment for transaction: " + request.getTransactionId())
+                .setReceiptEmail(request.getCustomerEmail())
+                .build();
+
         try {
-            Stripe.apiKey = stripeApiKey;
-
-            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
-                    .setAmount((long)(request.getAmount() * 100)) // In cents
-                    .setCurrency(request.getCurrency().toLowerCase())
-                    .setDescription("Payment for transaction: " + request.getTransactionId())
-                    .setReceiptEmail(request.getCustomerEmail())
-                    .build();
-
             PaymentIntent intent = PaymentIntent.create(params);
 
             log.info("Stripe PaymentIntent created: {}", intent.getId());
@@ -50,16 +52,9 @@ public class StripeProvider implements PaymentProvider {
                     .message("Stripe PaymentIntent created: " + intent.getStatus())
                     .timestamp(System.currentTimeMillis())
                     .build();
-
-        } catch (Exception e) {
+        } catch (StripeException e) {
             log.error("Stripe error: {}", e.getMessage());
-            return ExecutionResult.builder()
-                    .transactionId(request.getTransactionId())
-                    .status("FAILED")
-                    .provider("stripe")
-                    .message("Stripe error: " + e.getMessage())
-                    .timestamp(System.currentTimeMillis())
-                    .build();
+            throw new RuntimeException("Stripe call failed: " + e.getMessage(), e);
         }
     }
     

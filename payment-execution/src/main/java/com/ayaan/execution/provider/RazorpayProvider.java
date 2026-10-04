@@ -35,57 +35,46 @@ public class RazorpayProvider implements PaymentProvider {
         if (failureSimulator.shouldFail("razorpay")) {
             throw new RuntimeException("Simulated Razorpay failure");
         }
-        try {
-            JSONObject body = new JSONObject();
-            body.put("amount", (int) (request.getAmount() * 100));
-            body.put("currency", request.getCurrency());
-            body.put("receipt", UUID.randomUUID().toString());
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            String auth = Base64.getEncoder().encodeToString((keyId + ":" + keySecret).getBytes());
-            headers.set("Authorization", "Basic " + auth);
+        JSONObject body = new JSONObject();
+        body.put("amount", (int) (request.getAmount() * 100));
+        body.put("currency", request.getCurrency());
+        body.put("receipt", UUID.randomUUID().toString());
 
-            HttpEntity<String> entity = new HttpEntity<>(body.toString(), headers);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String auth = Base64.getEncoder().encodeToString((keyId + ":" + keySecret).getBytes());
+        headers.set("Authorization", "Basic " + auth);
 
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    "https://api.razorpay.com/v1/orders", entity, String.class);
+        HttpEntity<String> entity = new HttpEntity<>(body.toString(), headers);
 
-            JSONObject json = new JSONObject(response.getBody());
-            String orderId = json.getString("id");
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "https://api.razorpay.com/v1/orders", entity, String.class);
 
-            log.info("Razorpay order created: {}", orderId);
+        JSONObject json = new JSONObject(response.getBody());
+        String orderId = json.getString("id");
 
-            return ExecutionResult.builder()
-                    .transactionId(request.getTransactionId())
-                    .providerTransactionId(orderId)
-                    .status("SUCCESS")
-                    .provider("razorpay")
-                    .message("Razorpay order created successfully")
-                    .timestamp(System.currentTimeMillis())
-                    .build();
+        log.info("Razorpay order created: {}", orderId);
 
-        } catch (Exception e) {
-            log.error("Razorpay error: {}", e.getMessage());
-            return ExecutionResult.builder()
-                    .transactionId(request.getTransactionId())
-                    .status("FAILED")
-                    .provider("razorpay")
-                    .message("Razorpay error: " + e.getMessage())
-                    .timestamp(System.currentTimeMillis())
-                    .build();
-        }
+        return ExecutionResult.builder()
+                .transactionId(request.getTransactionId())
+                .providerTransactionId(orderId)
+                .status("SUCCESS")
+                .provider("razorpay")
+                .message("Razorpay order created successfully")
+                .timestamp(System.currentTimeMillis())
+                .build();
     }
-    
+
     public ExecutionResult fallbackPayment(ExecutionRequest request, Throwable t) {
-    log.warn("Razorpay circuit breaker FALLBACK triggered: {}", t.getMessage());
-    return ExecutionResult.builder()
-            .transactionId(request.getTransactionId())
-            .status("PENDING")
-            .provider("razorpay")
-            .message("Razorpay temporarily unavailable. Payment queued for retry.")
-            .timestamp(System.currentTimeMillis())
-            .build();
+        log.warn("Razorpay circuit breaker FALLBACK triggered: {}", t.getMessage());
+        return ExecutionResult.builder()
+                .transactionId(request.getTransactionId())
+                .status("PENDING")
+                .provider("razorpay")
+                .message("Razorpay temporarily unavailable. Payment queued for retry.")
+                .timestamp(System.currentTimeMillis())
+                .build();
     }
 
     @Override

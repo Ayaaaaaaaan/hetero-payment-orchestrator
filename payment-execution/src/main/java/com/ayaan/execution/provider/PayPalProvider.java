@@ -29,7 +29,7 @@ public class PayPalProvider implements PaymentProvider {
     @Value("${paypal.mode}")
     private String mode;
 
-     private final FailureSimulator failureSimulator;
+    private final FailureSimulator failureSimulator;
 
     @Override
     @CircuitBreaker(name = "paypal", fallbackMethod = "fallbackPayment")
@@ -37,6 +37,7 @@ public class PayPalProvider implements PaymentProvider {
         if (failureSimulator.shouldFail("paypal")) {
             throw new RuntimeException("Simulated PayPal failure");
         }
+
         try {
             APIContext apiContext = new APIContext(clientId, clientSecret, mode);
 
@@ -81,18 +82,12 @@ public class PayPalProvider implements PaymentProvider {
                                     .orElse("N/A"))
                     .timestamp(System.currentTimeMillis())
                     .build();
-
         } catch (PayPalRESTException e) {
             log.error("PayPal error: {}", e.getMessage());
-            return ExecutionResult.builder()
-                    .transactionId(request.getTransactionId())
-                    .status("FAILED")
-                    .provider("paypal")
-                    .message("PayPal error: " + e.getMessage())
-                    .timestamp(System.currentTimeMillis())
-                    .build();
+            throw new RuntimeException("PayPal call failed: " + e.getMessage(), e);
         }
     }
+
     public ExecutionResult fallbackPayment(ExecutionRequest request, Throwable t) {
         log.warn("PayPal circuit breaker FALLBACK triggered: {}", t.getMessage());
         return ExecutionResult.builder()
@@ -103,6 +98,7 @@ public class PayPalProvider implements PaymentProvider {
                 .timestamp(System.currentTimeMillis())
                 .build();
     }
+
     @Override
     public String getProviderName() {
         return "paypal";
