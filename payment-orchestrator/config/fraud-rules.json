@@ -7,7 +7,7 @@
       "type": "MAX_AMOUNT",
       "enabled": true,
       "priority": 1,
-      "params": { "maxAmount": 250000 },
+      "params": { "maxAmount": 200000 },
       "message": "Single transaction amount exceeds maximum allowed limit"
     },
     {
